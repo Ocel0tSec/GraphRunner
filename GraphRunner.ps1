@@ -7032,6 +7032,87 @@ function Invoke-GraphRunner{
 
     Write-Host -ForegroundColor yellow "[*] Results have been written to $folderName"
 }
+function Invoke-BlockedPasswordPol {
+    <#
+    .SYNOPSIS
+        Retrieves the blocked password policy from Azure AD using the Microsoft Graph API. Requires at least AuthenticationPolicyAdministrator.
+        Author: OcelotSec
+        License: MIT
+        Required Dependencies: None
+        Optional Dependencies: None
+
+    .DESCRIPTION
+        Uses the Microsoft Graph API to retrieve the blocked password policy from Azure AD.
+
+    .EXAMPLES
+        PS> Invoke-BlockedPasswordPol -Tokens $tokens
+
+    #>
+
+    Param(
+        [Parameter(Position = 0, Mandatory = $False)]
+        [object[]]
+        $Tokens = ""
+    )
+
+    if ($Tokens) {
+        Write-Host -ForegroundColor Yellow "[*] Using the provided access tokens."
+    }
+    else {
+        # Login
+        Write-Host -ForegroundColor Yellow "[*] First, you need to login."
+        Write-Host -ForegroundColor Yellow "[*] If you already have tokens you can use the -Tokens parameter to pass them to this function."
+        while ($auth -notlike "Yes") {
+            Write-Host -ForegroundColor Cyan "[*] Do you want to authenticate now (yes/no)?"
+            $answer = Read-Host
+            $answer = $answer.ToLower()
+            if ($answer -eq "yes" -or $answer -eq "y") {
+                Write-Host -ForegroundColor Yellow "[*] Running Get-GraphTokens now..."
+                $tokens = Get-GraphTokens -ExternalCall
+                $auth = "Yes"
+            } elseif ($answer -eq "no" -or $answer -eq "n") {
+                Write-Host -ForegroundColor Yellow "[*] Quitting..."
+                return
+            } else {
+                Write-Host -ForegroundColor Red "Invalid input. Please enter Yes or No."
+            }
+        }
+    }
+
+    $accessToken = $tokens.access_token
+    [string]$refreshToken = $tokens.refresh_token
+
+    # Define the URI for the API call
+    $uri = 'https://graph.microsoft.com/beta/policies/authenticationMethodsPolicy'
+
+    # Define the headers with the acquired token
+    $headers = @{
+        'Authorization' = "Bearer $accessToken"
+        'Content-Type' = 'application/json'
+    }
+
+    try {
+        # Send the request to the API
+        Write-Host -ForegroundColor Yellow "Sending request to URI: $uri"
+        $response = Invoke-RestMethod -Uri $uri -Method Get -Headers $headers
+
+        # Print the entire response
+        Write-Host "Successfully retrieved the password policy."
+        $response
+
+        # Expand and print the customBannedPasswords field
+        if ($response.customBannedPasswords) {
+            Write-Host "Custom Banned Passwords:"
+            $response.customBannedPasswords | ForEach-Object { Write-Host $_ }
+        }
+
+    } catch {
+        Write-Error "Failed to retrieve the password policy: $_"
+    }
+}
+
+# Call the function for testing
+Invoke-BlockedPasswordPol
 function Get-TenantID
 {
     [cmdletbinding()]
